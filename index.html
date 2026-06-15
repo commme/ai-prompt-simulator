@@ -232,7 +232,7 @@ const BANS = [
   {name:'왜곡된 손가락', on:false},
   {name:'얼굴 복제', on:false},
 ];
-const state = {subj:12, ratio:0, shot:2, angle:0, comp:0, light:1, lens:0, dof:1, focus:0, style:0, palette:0, tex:0, bg:0};
+const state = {subj:0, ratio:0, shot:2, angle:0, comp:0, light:1, lens:0, dof:1, focus:0, style:0, palette:0, tex:0, bg:0};
 
 /* ================= THREE 기본 ================= */
 const stage = document.getElementById('stage');
@@ -312,29 +312,28 @@ function buildCamera(){
   M(new THREE.CylinderGeometry(.1,.1,.14,24),dark,-.72,1.14,0,g);
   return g;
 }
-function buildPerson(){
+function buildHeadphones(){
   const g=new THREE.Group();
-  const skin=mat(0xe2bb95,.75), knit=mat(0xcfc0a5,.92), pants=mat(0x8a7a62,.9),
-        hairM=mat(0x2a201a,.65), shoe=mat(0x6b5a45,.8), cupM=mat(0xefe7da,.35);
-  const f1=M(new THREE.SphereGeometry(.1,16,16),shoe,-.14,.06,.06,g); f1.scale.set(1,.6,1.8);
-  const f2=M(new THREE.SphereGeometry(.1,16,16),shoe, .14,.06,.06,g); f2.scale.set(1,.6,1.8);
-  M(new THREE.CylinderGeometry(.125,.155,.8,18),pants,-.14,.5,0,g);
-  M(new THREE.CylinderGeometry(.125,.155,.8,18),pants, .14,.5,0,g);
-  M(new THREE.CylinderGeometry(.26,.31,.75,28),knit,0,1.25,0,g);
-  const sh=M(new THREE.SphereGeometry(.26,24,24),knit,0,1.6,0,g); sh.scale.set(1.2,.55,.85);
-  const ua1=M(new THREE.CylinderGeometry(.07,.085,.45,14),knit,-.34,1.38,.03,g); ua1.rotation.z=.22;
-  const ua2=M(new THREE.CylinderGeometry(.07,.085,.45,14),knit, .34,1.38,.03,g); ua2.rotation.z=-.22;
-  const fa1=M(new THREE.CylinderGeometry(.06,.068,.4,12),knit,-.25,1.18,.18,g); fa1.rotation.z=.5; fa1.rotation.x=-1.05;
-  const fa2=M(new THREE.CylinderGeometry(.06,.068,.4,12),knit, .25,1.18,.18,g); fa2.rotation.z=-.5; fa2.rotation.x=-1.05;
-  M(new THREE.SphereGeometry(.065,12,12),skin,-.1,1.12,.33,g);
-  M(new THREE.SphereGeometry(.065,12,12),skin, .1,1.12,.33,g);
-  M(new THREE.CylinderGeometry(.075,.075,.13,20),cupM,0,1.13,.33,g);
-  M(new THREE.CylinderGeometry(.065,.065,.015,20),mat(0x6b4226,.55),0,1.2,.33,g);
-  M(new THREE.CylinderGeometry(.085,.095,.12,16),skin,0,1.72,0,g);
-  M(new THREE.SphereGeometry(.23,28,28),skin,0,1.95,0,g);
-  const hb=M(new THREE.SphereGeometry(.25,28,28),hairM,0,2.0,-.05,g); hb.scale.set(1.02,.95,1);
-  M(new THREE.BoxGeometry(.4,.6,.14),hairM,0,1.72,-.2,g);
-  M(new THREE.SphereGeometry(.1,16,16),hairM,0,2.24,-.1,g);
+  const band=mat(0xbf9f63,.3,.85), cup=mat(0xe8e0d2,.5,.12),
+        pad=mat(0x2b2724,.82,.05), accent=mat(0xc9a86a,.26,.92), mesh=mat(0x4a443c,.7,.1);
+  // 헤드밴드(상단 반원 아치) + 안쪽 쿠션
+  M(new THREE.TorusGeometry(.62,.07,20,64,Math.PI),band,0,.6,0,g);
+  M(new THREE.TorusGeometry(.62,.042,14,64,Math.PI),pad,0,.575,.02,g);
+  [-1,1].forEach(s=>{
+    const x=s*.62;
+    // 요크(밴드 끝 → 이어컵 연결대)
+    const yk=M(new THREE.CylinderGeometry(.05,.05,.36,18),accent,x,.42,0,g);
+    M(new THREE.SphereGeometry(.06,18,18),accent,x,.6,0,g);  // 힌지
+    // 이어컵 외피(X축으로 납작한 둥근 캡슐)
+    const shell=M(new THREE.SphereGeometry(.29,36,28),cup,x,.24,0,g); shell.scale.set(.62,1,1);
+    // 외측 골드 데코 링 + 로고 점
+    const ring=M(new THREE.CylinderGeometry(.21,.21,.05,44),accent,x+s*.185,.24,0,g); ring.rotation.z=Math.PI/2;
+    M(new THREE.CylinderGeometry(.05,.05,.06,20),mesh,x+s*.205,.24,0,g).rotation.z=Math.PI/2;
+    // 이어 쿠션(안쪽, 머리 닿는 면)
+    const cush=M(new THREE.CylinderGeometry(.2,.24,.14,36),pad,x-s*.16,.24,0,g); cush.rotation.z=Math.PI/2;
+    M(new THREE.CylinderGeometry(.13,.13,.02,28),mesh,x-s*.235,.24,0,g).rotation.z=Math.PI/2;
+  });
+  g.userData.tick=t=>{ g.rotation.y=-.3+Math.sin(t*.4)*.28; };
   return g;
 }
 function buildPerfume(){
@@ -666,7 +665,7 @@ function buildUpload(){
 
 const SUBJECTS = [
   {icon:'📷', name:'빈티지 카메라', build:buildCamera,  cy:1.95, rs:1,   line:'클래식 빈티지 필름 카메라를 중심으로 한 프리미엄 제품컷'},
-  {icon:'👩', name:'인물(브랜딩)',  build:buildPerson,  cy:2.5,  rs:1.4, line:'차분한 분위기의 인물 브랜딩', extra:'특정 인물과 닮지 않은 오리지널 인물로, 헤어스타일·의상·표정을 일관되게 표현해줘.'},
+  {icon:'🎧', name:'헤드폰',        build:buildHeadphones, cy:1.95, rs:1.05, line:'프리미엄 무선 헤드폰의 테크 제품컷', extra:'매트한 질감과 골드 디테일, 부드러운 림라이트가 느껴지게 표현해줘.'},
   {icon:'🌸', name:'향수 보틀',     build:buildPerfume, cy:1.95, rs:.85, line:'앰버 컬러 유리 향수 보틀의 프리미엄 제품컷'},
   {icon:'☕', name:'커피 & 세라믹 컵', build:buildCoffee, cy:1.6, rs:.8, line:'세라믹 커피잔의 감성 라이프스타일'},
   {icon:'👟', name:'스니커즈',      build:buildSneaker, cy:1.7,  rs:.95, line:'스니커즈 운동화의 콘셉트 제품컷'},
