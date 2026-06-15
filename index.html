@@ -508,45 +508,88 @@ const spaceFx=new THREE.Group(); spaceFx.visible=false; scene.add(spaceFx);
 })();
 function buildEarth(){
   const g=new THREE.Group();
-  const tex=canvasTex(1024,512,(x,w,h)=>{
+  // 대륙 형태를 한 번 정의해 color/bump/rough 텍스처에 동일하게 적용(정합)
+  const conts=[];
+  for(let i=0;i<7;i++){
+    const cx=Math.random(), cy=.16+Math.random()*.68, parts=[], n=10+(Math.random()*10|0);
+    for(let j=0;j<n;j++){ const a=Math.random()*7, d=Math.random()*.13;
+      parts.push([cx+Math.cos(a)*d, cy+Math.sin(a)*d*.6, .024+Math.random()*.055]); }
+    conts.push(parts);
+  }
+  const land=['#2f6b34','#3c7a39','#5e7a40','#86794d','#3f6e3c'];
+  const paintLand=(x,w,h,colFn)=>conts.forEach((parts,ci)=>parts.forEach(p=>{
+    x.fillStyle=colFn(ci);
+    x.beginPath(); x.ellipse(p[0]*w,p[1]*h,p[2]*w,p[2]*w*.78,0,0,7); x.fill();
+  }));
+  // 컬러: 심해 그라데이션 + 대륙 + 빙하
+  const tex=canvasTex(2048,1024,(x,w,h)=>{
     const gr=x.createLinearGradient(0,0,0,h);
-    gr.addColorStop(0,'#2a6db5'); gr.addColorStop(.5,'#1d5494'); gr.addColorStop(1,'#2a6db5');
+    gr.addColorStop(0,'#0b3157'); gr.addColorStop(.5,'#0e4576'); gr.addColorStop(1,'#0b3157');
     x.fillStyle=gr; x.fillRect(0,0,w,h);
-    const cols=['#3e7d3a','#4a8a42','#86975a'];
-    for(let i=0;i<9;i++) blobs(x, Math.random()*w, h*.18+Math.random()*h*.64, 55+Math.random()*75, cols[i%3]);
-    x.fillStyle='rgba(240,248,255,.92)';
-    x.beginPath(); x.ellipse(w*.5,0,w*.6,h*.07,0,0,7); x.fill();
-    x.beginPath(); x.ellipse(w*.5,h,w*.6,h*.09,0,0,7); x.fill();
+    for(let i=0;i<46;i++){ x.fillStyle='rgba(6,30,60,'+(.05+Math.random()*.12)+')';
+      const r=40+Math.random()*130; x.beginPath(); x.ellipse(Math.random()*w,Math.random()*h,r,r*.6,0,0,7); x.fill(); }
+    paintLand(x,w,h,ci=>land[ci%land.length]);
+    x.fillStyle='rgba(240,248,255,.95)';
+    x.beginPath(); x.ellipse(w*.5,0,w*.5,h*.07,0,0,7); x.fill();
+    x.beginPath(); x.ellipse(w*.5,h,w*.5,h*.09,0,0,7); x.fill();
   });
-  const earth=M(new THREE.SphereGeometry(.82,48,48),new THREE.MeshStandardMaterial({map:tex,roughness:.75}),0,.88,0,g);
+  // 높이(범프): 바다=어둠, 대륙=밝음 → 해안선·산맥 입체감
+  const bump=canvasTex(2048,1024,(x,w,h)=>{
+    x.fillStyle='#000'; x.fillRect(0,0,w,h);
+    paintLand(x,w,h,()=>'#ffffff');
+    for(let i=0;i<320;i++){ x.fillStyle='rgba(255,255,255,'+(Math.random()*.25)+')';
+      x.beginPath(); x.arc(Math.random()*w,Math.random()*h,1+Math.random()*4,0,7); x.fill(); }
+  });
+  // 거칠기: 바다=매끈(반짝), 대륙=거칢
+  const rough=canvasTex(1024,512,(x,w,h)=>{ x.fillStyle='#2c2c2c'; x.fillRect(0,0,w,h); paintLand(x,w,h,()=>'#e6e6e6'); });
+  const earth=M(new THREE.SphereGeometry(.82,64,64),
+    new THREE.MeshStandardMaterial({map:tex,bumpMap:bump,bumpScale:.035,roughnessMap:rough,roughness:1,metalness:.05}),0,.88,0,g);
+  // 구름
   const ctex=canvasTex(1024,512,(x,w,h)=>{
-    for(let i=0;i<26;i++){
-      const cx=Math.random()*w, cy=Math.random()*h, r=20+Math.random()*55;
+    for(let i=0;i<30;i++){
+      const cx=Math.random()*w, cy=Math.random()*h, r=18+Math.random()*60;
       const rg=x.createRadialGradient(cx,cy,0,cx,cy,r);
-      rg.addColorStop(0,'rgba(255,255,255,.85)'); rg.addColorStop(1,'rgba(255,255,255,0)');
-      x.fillStyle=rg; x.beginPath(); x.ellipse(cx,cy,r*1.6,r*.6,0,0,7); x.fill();
+      rg.addColorStop(0,'rgba(255,255,255,.9)'); rg.addColorStop(1,'rgba(255,255,255,0)');
+      x.fillStyle=rg; x.beginPath(); x.ellipse(cx,cy,r*1.7,r*.65,0,0,7); x.fill();
     }
   });
-  const clouds=M(new THREE.SphereGeometry(.85,48,48),new THREE.MeshStandardMaterial({map:ctex,transparent:true,roughness:1,depthWrite:false}),0,.88,0,g);
-  const atmo=M(new THREE.SphereGeometry(.95,32,32),new THREE.MeshBasicMaterial({color:0x6fb7ff,transparent:true,opacity:.14,side:THREE.BackSide}),0,.88,0,g);
-  clouds.castShadow=false; atmo.castShadow=false;
-  g.userData.tick=t=>{ earth.rotation.y=t*.12; clouds.rotation.y=t*.16; };
+  const clouds=M(new THREE.SphereGeometry(.852,64,64),new THREE.MeshStandardMaterial({map:ctex,transparent:true,roughness:1,depthWrite:false}),0,.88,0,g);
+  // 대기 림광(프레넬 느낌: BackSide 두 겹)
+  const atmo =M(new THREE.SphereGeometry(.9,48,48), new THREE.MeshBasicMaterial({color:0x6fb7ff,transparent:true,opacity:.22,side:THREE.BackSide}),0,.88,0,g);
+  const atmo2=M(new THREE.SphereGeometry(.99,48,48),new THREE.MeshBasicMaterial({color:0x3d8fe0,transparent:true,opacity:.12,side:THREE.BackSide}),0,.88,0,g);
+  clouds.castShadow=atmo.castShadow=atmo2.castShadow=false;
+  g.userData.tick=t=>{ earth.rotation.y=t*.12; clouds.rotation.y=t*.15; };
   return g;
 }
 function buildMoon(){
   const g=new THREE.Group();
-  const tex=canvasTex(1024,512,(x,w,h)=>{
-    const gr=x.createLinearGradient(0,0,w,h); gr.addColorStop(0,'#cdc9c0'); gr.addColorStop(1,'#a8a49b');
+  // 크레이터·마리아(현무암 평원)를 한 번 정의해 color/bump에 동일 적용
+  const craters=[]; for(let i=0;i<64;i++) craters.push([Math.random(),Math.random(),4+Math.random()*30]);
+  const maria=[];   for(let i=0;i<6;i++)  maria.push([Math.random(),Math.random(),60+Math.random()*100]);
+  const tex=canvasTex(2048,1024,(x,w,h)=>{
+    const gr=x.createLinearGradient(0,0,w,h); gr.addColorStop(0,'#cbc7be'); gr.addColorStop(1,'#a6a299');
     x.fillStyle=gr; x.fillRect(0,0,w,h);
-    for(let i=0;i<70;i++){
-      const cx=Math.random()*w, cy=Math.random()*h, r=4+Math.random()*26;
-      x.fillStyle='rgba(120,115,106,'+(0.25+Math.random()*.4)+')';
-      x.beginPath(); x.arc(cx,cy,r,0,7); x.fill();
-      x.strokeStyle='rgba(238,235,228,.55)'; x.lineWidth=2.5;
-      x.beginPath(); x.arc(cx,cy,r,Math.PI*1.1,Math.PI*1.9); x.stroke();
-    }
+    maria.forEach(m=>{ const rg=x.createRadialGradient(m[0]*w,m[1]*h,0,m[0]*w,m[1]*h,m[2]);
+      rg.addColorStop(0,'rgba(118,114,106,.5)'); rg.addColorStop(1,'rgba(118,114,106,0)');
+      x.fillStyle=rg; x.beginPath(); x.arc(m[0]*w,m[1]*h,m[2],0,7); x.fill(); });
+    craters.forEach(c=>{ const cx=c[0]*w, cy=c[1]*h, r=c[2];
+      x.fillStyle='rgba(108,103,95,.4)'; x.beginPath(); x.arc(cx,cy,r,0,7); x.fill();
+      x.strokeStyle='rgba(236,232,224,.6)'; x.lineWidth=2; x.beginPath(); x.arc(cx,cy,r,0,7); x.stroke(); });
+    for(let i=0;i<420;i++){ x.fillStyle='rgba(80,76,70,'+(Math.random()*.18)+')';
+      x.beginPath(); x.arc(Math.random()*w,Math.random()*h,.6+Math.random()*1.6,0,7); x.fill(); }
   });
-  const moon=M(new THREE.SphereGeometry(.85,48,48),new THREE.MeshStandardMaterial({map:tex,roughness:.95}),0,.9,0,g);
+  // 범프: 크레이터를 오목하게(테두리 밝음=융기, 중앙 어둠=함몰)
+  const bump=canvasTex(2048,1024,(x,w,h)=>{
+    x.fillStyle='#888'; x.fillRect(0,0,w,h);
+    craters.forEach(c=>{ const cx=c[0]*w, cy=c[1]*h, r=c[2];
+      const rg=x.createRadialGradient(cx,cy,0,cx,cy,r);
+      rg.addColorStop(0,'#3a3a3a'); rg.addColorStop(.72,'#4a4a4a'); rg.addColorStop(.86,'#ffffff'); rg.addColorStop(1,'#808080');
+      x.fillStyle=rg; x.beginPath(); x.arc(cx,cy,r,0,7); x.fill(); });
+    for(let i=0;i<520;i++){ const v=Math.random()*255|0; x.fillStyle='rgba('+v+','+v+','+v+',.15)';
+      x.beginPath(); x.arc(Math.random()*w,Math.random()*h,1+Math.random()*2,0,7); x.fill(); }
+  });
+  const moon=M(new THREE.SphereGeometry(.85,64,64),
+    new THREE.MeshStandardMaterial({map:tex,bumpMap:bump,bumpScale:.05,roughness:1,metalness:0}),0,.9,0,g);
   g.userData.tick=t=>{ moon.rotation.y=t*.07; };
   return g;
 }
@@ -580,38 +623,6 @@ function buildIsland(){
   M(new THREE.CylinderGeometry(.16,.16,.02,16),mat(0x7fb5d6,.15,.3),.28,1.28,-.3,g);
   for(let i=0;i<3;i++) M(new THREE.SphereGeometry(i?.05:.07,8,6),rock,.52+i*.1,1.3,.34-i*.06,g);
   g.userData.tick=t=>{ g.position.y=Math.sin(t*.9)*.06; g.rotation.y=t*.05; };
-  return g;
-}
-function buildSaturn(){
-  const g=new THREE.Group();
-  const tex=canvasTex(1024,512,(x,w,h)=>{
-    const bands=['#cfc09a','#bfae87','#d8c9a4','#b3a079','#c9b78e','#ab9871','#d4c49e'];
-    let y=0;
-    while(y<h){
-      const bh=12+Math.random()*42;
-      x.fillStyle=bands[Math.floor(Math.random()*bands.length)];
-      x.fillRect(0,y,w,bh); y+=bh;
-    }
-    x.fillStyle='rgba(255,246,224,.14)'; x.fillRect(0,0,w,h*.22);
-    x.fillStyle='rgba(120,100,70,.18)';  x.fillRect(0,h*.82,w,h*.18);
-  });
-  const p=M(new THREE.SphereGeometry(.62,48,48),new THREE.MeshStandardMaterial({map:tex,roughness:.8}),0,.95,0,g);
-  const rtex=canvasTex(512,512,(x,w,h)=>{
-    const cx=w/2;
-    [[.5,.6,'rgba(216,200,160,.85)'],[.62,.68,'rgba(190,172,130,.5)'],
-     [.7,.79,'rgba(228,213,178,.9)'],[.81,.85,'rgba(180,165,128,.45)'],
-     [.87,.97,'rgba(232,218,184,.7)']].forEach(r=>{
-      const grd=x.createRadialGradient(cx,cx,cx*r[0],cx,cx,cx*r[1]);
-      grd.addColorStop(0,'rgba(0,0,0,0)'); grd.addColorStop(.5,r[2]); grd.addColorStop(1,'rgba(0,0,0,0)');
-      x.fillStyle=grd;
-      x.beginPath(); x.arc(cx,cx,cx*r[1],0,7); x.arc(cx,cx,cx*r[0],0,7,true); x.fill();
-    });
-  });
-  const ring=new THREE.Mesh(new THREE.PlaneGeometry(2.7,2.7),
-    new THREE.MeshBasicMaterial({map:rtex,transparent:true,side:THREE.DoubleSide,depthWrite:false}));
-  ring.position.y=.95; ring.rotation.x=-Math.PI/2+.35; ring.rotation.y=.15; g.add(ring);
-  const glow=glowSprite('rgba(240,220,170,.3)',2.6,.35); glow.position.y=.95; g.add(glow);
-  g.userData.tick=t=>{ p.rotation.y=t*.1; };
   return g;
 }
 let userTex=null, userAspect=1;
@@ -653,7 +664,6 @@ const SUBJECTS = [
   {icon:'🍰', name:'딸기 케이크',   build:buildCake,    cy:1.85, rs:.9,  line:'딸기 케이크의 푸드 스타일링 컷'},
   {icon:'🌍', name:'지구',          build:buildEarth,  cy:2.25, rs:1.05, line:'우주에서 바라본 푸른 지구의 행성 컷', extra:'대륙과 구름, 푸른 대기의 빛이 입체적으로 느껴지게 표현해줘.'},
   {icon:'🌙', name:'달',            build:buildMoon,   cy:2.27, rs:1.05, line:'크레이터가 선명한 달의 행성 컷'},
-  {icon:'🪐', name:'토성(고리 행성)', build:buildSaturn, cy:2.33, rs:1.15, line:'은은한 고리를 두른 토성의 행성 컷', extra:'고리의 결과 부드러운 빛 번짐이 느껴지게 표현해줘.'},
   {icon:'☁️', name:'뭉게구름',      build:buildCloud,  cy:1.95, rs:1,    line:'몽글몽글한 뭉게구름과 빗방울의 감성 컷'},
   {icon:'🏝', name:'자연 섬',       build:buildIsland, cy:2.25, rs:1.1,  line:'나무와 연못이 있는 떠 있는 자연 섬 미니어처 디오라마 컷'},
   {icon:'🖼', name:'내 이미지 업로드', build:buildUpload, cy:2.2, rs:1.15, line:'첨부한 참고 이미지를 재해석한 콘셉트 컷', upload:true, extra:'참고 이미지는 구도·색감·분위기만 참고하고, 디테일은 새롭게 재해석해줘.'},
